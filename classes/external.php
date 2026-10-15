@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * External API for OpenAI ChatBot Block
+ * External API for the ChatBot block backed by DeepSeek.
  *
  * @package    block_openai_chatbot
  * @copyright  2025 Esteban Piazza <esteban@codeki.org>
@@ -24,379 +24,180 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-require_once($CFG->libdir . '/externallib.php');
+global $CFG;
+
+// Moodle 4.2 moved the external API classes into the core_external subsystem. Older versions only
+// provide them, as global classes, from lib/externallib.php.
+if (!class_exists('external_api')) {
+    if (class_exists('core_external\\external_api')) {
+        class_alias('core_external\\external_api', 'external_api');
+        class_alias('core_external\\external_function_parameters', 'external_function_parameters');
+        class_alias('core_external\\external_value', 'external_value');
+        class_alias('core_external\\external_single_structure', 'external_single_structure');
+        class_alias('core_external\\external_multiple_structure', 'external_multiple_structure');
+    } else {
+        require_once($CFG->libdir . '/externallib.php');
+    }
+}
 require_once($CFG->libdir . '/blocklib.php');
-require_once($CFG->dirroot . '/blocks/openai_chatbot/block_openai_chatbot.php');
+
+use block_openai_chatbot\api\deepseek_client;
+use block_openai_chatbot\local\course_context;
 
 /**
- * External service class for OpenAI ChatBot
+ * External service class for the ChatBot block.
+ *
+ * The web service contract (function name, parameters and return structure) is unchanged
+ * so that existing callers, including the mobile app, keep working.
  */
 class block_openai_chatbot_external extends external_api {
-
     /**
-     * Parameters for ask_question function
+     * Parameters for the ask_question function.
+     *
      * @return external_function_parameters
      */
     public static function ask_question_parameters() {
         return new external_function_parameters(
-            array(
+            [
                 'question' => new external_value(PARAM_TEXT, 'The user question'),
                 'blockinstanceid' => new external_value(PARAM_INT, 'Block instance ID'),
-                'contextid' => new external_value(PARAM_INT, 'Context ID')
-            )
+                'contextid' => new external_value(PARAM_INT, 'Context ID'),
+            ]
         );
     }
 
     /**
-     * Ask a question to the OpenAI Assistant
-     * @param string $question The user question
-     * @param int $blockinstanceid Block instance ID
-     * @param int $contextid Context ID
-     * @return array Response data
+     * Ask a question to the DeepSeek powered assistant.
+     *
+     * @param string $question The user question.
+     * @param int $blockinstanceid Block instance ID.
+     * @param int $contextid Context ID.
+     * @return array Response data.
      */
     public static function ask_question($question, $blockinstanceid, $contextid) {
-        global $DB, $USER;
+        global $DB;
 
         // Validate parameters.
-        $params = self::validate_parameters(self::ask_question_parameters(), array(
+        $params = self::validate_parameters(self::ask_question_parameters(), [
             'question' => $question,
             'blockinstanceid' => $blockinstanceid,
-            'contextid' => $contextid
-        ));
+            'contextid' => $contextid,
+        ]);
 
         // Validate context.
         $context = context::instance_by_id($params['contextid']);
         self::validate_context($context);
-        
-        // Ensure we have a valid context.
-        if (!$context) {
-            throw new invalid_parameter_exception(get_string('invalid_context', 'block_openai_chatbot'));
-        }
 
         // Check capabilities.
         require_capability('block/openai_chatbot:view', $context);
 
         // Validate block instance.
-        $blockinstance = $DB->get_record('block_instances', array('id' => $params['blockinstanceid']), '*', MUST_EXIST);
-        
+        $blockinstance = $DB->get_record('block_instances', ['id' => $params['blockinstanceid']], '*', MUST_EXIST);
+
         // Ensure the block instance exists and is of the correct type.
         if ($blockinstance->blockname !== 'openai_chatbot') {
             throw new invalid_parameter_exception(get_string('invalid_block_instance', 'block_openai_chatbot'));
         }
-        
+
         // Clean the question.
         $cleanquestion = clean_param($params['question'], PARAM_TEXT);
-        
-        if (empty($cleanquestion)) {
+
+        if (trim($cleanquestion) === '') {
             throw new invalid_parameter_exception(get_string('question_empty', 'block_openai_chatbot'));
         }
 
-        // Get block configuration.
-        $apikey = get_config('block_openai_chatbot', 'apikey');
-        $assistantid = get_config('block_openai_chatbot', 'assistantid');
+        $client = new deepseek_client();
 
-        if (empty($apikey) || empty($assistantid)) {
-            return array(
+        if (!$client->is_configured()) {
+            return [
                 'success' => false,
                 'message' => get_string('config_missing', 'block_openai_chatbot'),
-                'html' => '<div class="alert alert-danger">' . get_string('config_missing', 'block_openai_chatbot') . '</div>'
-            );
+                'html' => '<div class="chatbot-error">' . get_string('config_missing', 'block_openai_chatbot') . '</div>',
+            ];
         }
 
         try {
-            // Get course context for the question.
-            $coursecontext = self::get_course_context($context);
-            $contextual_question = $coursecontext . "User question: " . $cleanquestion;
-
-            // Process the question using OpenAI.
-            $result = self::process_openai_question($apikey, $assistantid, $contextual_question, $cleanquestion);
+            $result = self::process_deepseek_question($client, $cleanquestion, $context);
 
             return $result;
+        } catch (moodle_exception $e) {
+            // Log the error code only: the API key must never reach the logs.
+            debugging('ChatBot block DeepSeek error: ' . $e->errorcode, DEBUG_DEVELOPER);
 
-        } catch (Exception $e) {
-            // Log the error for debugging
-            error_log('OpenAI ChatBot Error: ' . $e->getMessage());
-            
-            return array(
-                'success' => false,
-                'message' => get_string('error_message', 'block_openai_chatbot', $e->getMessage()),
-                'html' => '<div class="alert alert-danger"><strong>' . get_string('strong_error', 'block_openai_chatbot') . '</strong> ' . 
-                         htmlspecialchars($e->getMessage()) . '</div>'
-            );
+            return self::error_response($e->errorcode, $context);
+        } catch (\Exception $e) {
+            debugging('ChatBot block unexpected error: ' . get_class($e), DEBUG_DEVELOPER);
+
+            return self::error_response('api_error_unexpected', $context);
         }
     }
 
     /**
-     * Return description for ask_question function
+     * Return description for the ask_question function.
+     *
      * @return external_single_structure
      */
     public static function ask_question_returns() {
         return new external_single_structure(
-            array(
+            [
                 'success' => new external_value(PARAM_BOOL, 'Whether the request was successful'),
                 'message' => new external_value(PARAM_TEXT, 'Response message', VALUE_OPTIONAL),
-                'html' => new external_value(PARAM_RAW, 'HTML response content')
-            )
+                'html' => new external_value(PARAM_RAW, 'HTML response content'),
+            ]
         );
     }
 
     /**
-     * Process question using OpenAI API
-     * @param string $apikey OpenAI API key
-     * @param string $assistantid Assistant ID
-     * @param string $contextual_question Question with context
-     * @param string $original_question Original user question
-     * @return array Response array
+     * Build a user facing error response.
+     *
+     * Administrators get the technical detail from the debugging log; regular users only see
+     * a translated, generic message so that no provider or configuration detail leaks.
+     *
+     * @param string $errorcode Plugin language string identifier.
+     * @param context $context Context used to decide how much detail is shown.
+     * @return array Response data.
      */
-    private static function process_openai_question($apikey, $assistantid, $contextual_question, $original_question) {
-        // Step 1: Create thread.
-        $thread_response = self::create_openai_thread($apikey);
-        if (!$thread_response['success']) {
-            throw new Exception($thread_response['error']);
-        }
-        $threadId = $thread_response['thread_id'];
+    private static function error_response(string $errorcode, $context): array {
+        $message = get_string($errorcode, 'block_openai_chatbot');
 
-        // Step 2: Add message to thread.
-        $message_response = self::add_message_to_thread($apikey, $threadId, $contextual_question);
-        if (!$message_response['success']) {
-            throw new Exception($message_response['error']);
+        // Administrators additionally get a pointer to the configuration page; the technical
+        // detail stays in the debugging log and is never shown to regular users.
+        if (has_capability('moodle/site:config', $context)) {
+            $message .= ' ' . get_string('error_admin_hint', 'block_openai_chatbot');
         }
 
-        // Step 3: Create and wait for run completion.
-        $run_response = self::create_and_wait_for_run($apikey, $threadId, $assistantid);
-        if (!$run_response['success']) {
-            throw new Exception($run_response['error']);
-        }
+        return [
+            'success' => false,
+            'message' => $message,
+            'html' => '<div class="chatbot-error">' . s($message) . '</div>',
+        ];
+    }
 
-        // Step 4: Get assistant response.
-        $response = self::get_assistant_response($apikey, $threadId);
-        if (!$response['success']) {
-            throw new Exception($response['error']);
-        }
+    /**
+     * Process a question using the DeepSeek chat completions API.
+     *
+     * @param deepseek_client $client Configured client.
+     * @param string $question Cleaned user question.
+     * @param context $context Current context.
+     * @return array Response array.
+     * @throws moodle_exception When the API request or response fails.
+     */
+    private static function process_deepseek_question(deepseek_client $client, string $question, $context): array {
+        $systemprompt = (string)(get_config('block_openai_chatbot', 'systemprompt') ?: '');
+        $coursecontext = course_context::build($context);
+        $messages = deepseek_client::build_messages($systemprompt, $question, $coursecontext);
 
-        // Format the response HTML (only the answer, question is handled by JavaScript).
+        $response = $client->create_chat_completion($messages);
+
         $html = '<div class="chatbot-answer">';
         $html .= '<div class="chatbot-answer-header">🤖 ' . get_string('response_header', 'block_openai_chatbot') . '</div>';
-        $html .= '<div class="chatbot-answer-content">' . nl2br(htmlspecialchars($response['content'])) . '</div>';
+        $html .= '<div class="chatbot-answer-content">' . nl2br(s($response['content'])) . '</div>';
         $html .= '</div>';
 
-        return array(
+        return [
             'success' => true,
-            'message' => 'Response generated successfully',
-            'html' => $html
-        );
-    }
-
-    /**
-     * Get course context information
-     * @param context $context Current context
-     * @return string Context information
-     */
-    private static function get_course_context($context) {
-        global $COURSE;
-
-        if ($context->contextlevel == CONTEXT_COURSE || $context->contextlevel == CONTEXT_MODULE) {
-            $courseid = $context->get_course_context()->instanceid;
-            if ($courseid && $courseid != SITEID) {
-                $course = get_course($courseid);
-                $contextstr = "Course context:\n";
-                $contextstr .= "Course name: " . $course->fullname . "\n";
-                
-                if (!empty($course->summary)) {
-                    $contextstr .= "Course description: " . strip_tags($course->summary) . "\n";
-                }
-                
-                $contextstr .= "Please provide responses specifically related to this course content. ";
-                $contextstr .= "If the question is not related to this course, politely indicate that you can only help with course-related topics.\n\n";
-                
-                return $contextstr;
-            }
-        }
-
-        return "General Moodle context. ";
-    }
-
-    /**
-     * Create OpenAI thread
-     * @param string $apikey OpenAI API key
-     * @return array Success status and thread ID or error message
-     */
-    private static function create_openai_thread($apikey) {
-        $curl = new \curl();
-        $curl->setHeader([
-            'Authorization: Bearer ' . $apikey,
-            'Content-Type: application/json',
-            'OpenAI-Beta: assistants=v2'
-        ]);
-        
-        $response = $curl->post('https://api.openai.com/v1/threads', json_encode(array()));
-        $info = $curl->get_info();
-        
-        if ($info['http_code'] != 200) {
-            return array('success' => false, 'error' => 'Failed to create conversation thread');
-        }
-        
-        $thread = json_decode($response, true);
-        return array('success' => true, 'thread_id' => $thread['id']);
-    }
-
-    /**
-     * Add message to OpenAI thread
-     * @param string $apikey OpenAI API key
-     * @param string $threadId Thread ID
-     * @param string $message Message content
-     * @return array Success status or error message
-     */
-    private static function add_message_to_thread($apikey, $threadId, $message) {
-        $curl = new \curl();
-        $curl->setHeader([
-            'Authorization: Bearer ' . $apikey,
-            'Content-Type: application/json',
-            'OpenAI-Beta: assistants=v2'
-        ]);
-        
-        $data = json_encode(array(
-            'role' => 'user',
-            'content' => $message
-        ));
-        
-        $response = $curl->post('https://api.openai.com/v1/threads/' . $threadId . '/messages', $data);
-        $info = $curl->get_info();
-        
-        if ($info['http_code'] != 200) {
-            return array('success' => false, 'error' => 'Failed to send message');
-        }
-        
-        return array('success' => true);
-    }
-
-    /**
-     * Create run and wait for completion
-     * @param string $apikey OpenAI API key
-     * @param string $threadId Thread ID
-     * @param string $assistantId Assistant ID
-     * @return array Success status or error message
-     */
-    private static function create_and_wait_for_run($apikey, $threadId, $assistantId) {
-        // Create run.
-        $curl = new \curl();
-        $curl->setHeader([
-            'Authorization: Bearer ' . $apikey,
-            'Content-Type: application/json',
-            'OpenAI-Beta: assistants=v2'
-        ]);
-        
-        $data = json_encode(array('assistant_id' => $assistantId));
-        $response = $curl->post('https://api.openai.com/v1/threads/' . $threadId . '/runs', $data);
-        $info = $curl->get_info();
-        
-        if ($info['http_code'] != 200) {
-            return array('success' => false, 'error' => 'Failed to execute assistant: HTTP ' . $info['http_code'] . ' - ' . $response);
-        }
-        
-        $run = json_decode($response, true);
-        
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return array('success' => false, 'error' => 'Invalid JSON response when creating run');
-        }
-        
-        if (!isset($run['id'])) {
-            return array('success' => false, 'error' => 'Missing run ID in response');
-        }
-        
-        $runId = $run['id'];
-        
-        // Wait for completion.
-        $maxAttempts = 30;
-        $attempts = 0;
-        
-        while ($attempts < $maxAttempts) {
-            sleep(1);
-            $attempts++;
-            
-            $curl->setHeader([
-                'Authorization: Bearer ' . $apikey,
-                'OpenAI-Beta: assistants=v2'
-            ]);
-            
-            $response = $curl->get('https://api.openai.com/v1/threads/' . $threadId . '/runs/' . $runId);
-            $info = $curl->get_info();
-            
-            if ($info['http_code'] != 200) {
-                return array('success' => false, 'error' => 'Failed to check run status: HTTP ' . $info['http_code']);
-            }
-            
-            $runStatus = json_decode($response, true);
-            
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                return array('success' => false, 'error' => 'Invalid JSON in run status response');
-            }
-            
-            if (!isset($runStatus['status'])) {
-                return array('success' => false, 'error' => 'Missing status in run response');
-            }
-            
-            $status = $runStatus['status'];
-            
-            if ($status == 'completed') {
-                return array('success' => true);
-            } else if ($status == 'failed') {
-                $errorDetails = isset($runStatus['last_error']) ? $runStatus['last_error']['message'] : 'Unknown error';
-                return array('success' => false, 'error' => 'Assistant failed: ' . $errorDetails);
-            } else if ($status == 'cancelled' || $status == 'expired') {
-                return array('success' => false, 'error' => 'Assistant run was ' . $status);
-            }
-        }
-        
-        return array('success' => false, 'error' => 'Assistant response timeout after ' . $maxAttempts . ' attempts');
-    }
-
-    /**
-     * Get assistant response from thread
-     * @param string $apikey OpenAI API key
-     * @param string $threadId Thread ID
-     * @return array Success status and content or error message
-     */
-    private static function get_assistant_response($apikey, $threadId) {
-        $curl = new \curl();
-        $curl->setHeader([
-            'Authorization: Bearer ' . $apikey,
-            'OpenAI-Beta: assistants=v2'
-        ]);
-        
-        $response = $curl->get('https://api.openai.com/v1/threads/' . $threadId . '/messages');
-        $info = $curl->get_info();
-        
-        if ($info['http_code'] != 200) {
-            return array('success' => false, 'error' => 'Failed to get response: HTTP ' . $info['http_code']);
-        }
-        
-        $messages = json_decode($response, true);
-        
-        // Check if JSON decode was successful
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return array('success' => false, 'error' => 'Invalid JSON response from OpenAI');
-        }
-        
-        // Check if messages data exists
-        if (!isset($messages['data']) || !is_array($messages['data'])) {
-            return array('success' => false, 'error' => 'Invalid message format from OpenAI');
-        }
-        
-        // Find assistant response
-        foreach ($messages['data'] as $message) {
-            if (isset($message['role']) && $message['role'] == 'assistant') {
-                if (isset($message['content']) && is_array($message['content']) && count($message['content']) > 0) {
-                    $content = $message['content'][0];
-                    if (isset($content['type']) && $content['type'] == 'text') {
-                        if (isset($content['text']['value'])) {
-                            return array('success' => true, 'content' => $content['text']['value']);
-                        }
-                    }
-                }
-            }
-        }
-        
-        return array('success' => false, 'error' => 'No assistant response found in messages');
+            'message' => get_string('response_success', 'block_openai_chatbot'),
+            'html' => $html,
+        ];
     }
 }

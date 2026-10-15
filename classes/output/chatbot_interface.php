@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Chatbot interface renderable class for OpenAI ChatBot Block
+ * Chatbot interface renderable class for the ChatBot Block.
  *
  * @package    block_openai_chatbot
  * @copyright  2025 Esteban Piazza <esteban@codeki.org>
@@ -24,38 +24,40 @@
 
 namespace block_openai_chatbot\output;
 
-defined('MOODLE_INTERNAL') || die();
-
 use renderable;
 use renderer_base;
 use templatable;
 use stdClass;
 
 /**
- * Renderable class for the chatbot interface
+ * Renderable class for the chatbot interface.
  */
 class chatbot_interface implements renderable, templatable {
-    
     /** @var int Block instance ID */
     protected $instanceid;
-    
+
     /** @var string Bot name */
     protected $botname;
-    
-    /** @var string Response HTML content */
+
+    /** @var int Context ID used for the AJAX calls */
+    protected $contextid;
+
+    /** @var string|null Response HTML content */
     protected $response;
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param int $instanceid Block instance ID
      * @param string $botname Bot name to display
+     * @param int $contextid Context ID the block is displayed in
      * @param string|null $response Optional response content (deprecated, kept for compatibility)
      */
-    public function __construct($instanceid, $botname, $response = null) {
+    public function __construct($instanceid, $botname, $contextid, $response = null) {
         $this->instanceid = $instanceid;
         $this->botname = $botname;
-        $this->response = $response; // Not used in AJAX mode
+        $this->contextid = $contextid;
+        $this->response = $response; // Not used in AJAX mode.
     }
 
     /**
@@ -65,18 +67,16 @@ class chatbot_interface implements renderable, templatable {
      * @return stdClass Data ready for use in a mustache template
      */
     public function export_for_template(renderer_base $output) {
-        global $PAGE;
-        
         $data = new stdClass();
         $data->instanceid = $this->instanceid;
         $data->botname = $this->botname;
         $data->welcomemessage = get_string('welcome_message', 'block_openai_chatbot');
         $data->placeholdertext = get_string('input_placeholder', 'block_openai_chatbot');
         $data->buttontext = get_string('ask_button', 'block_openai_chatbot');
-        $data->contextid = $PAGE->context->id;
-        
-        // No server-side response processing in AJAX mode
-        
+        $data->contextid = $this->contextid;
+
+        // No server-side response processing in AJAX mode.
+
         return $data;
     }
 }

@@ -14,7 +14,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * OpenAI ChatBot JavaScript module
+ * ChatBot JavaScript module (DeepSeek provider)
  *
  * @package    block_openai_chatbot
  * @copyright  2025 Esteban Piazza <esteban@codeki.org>

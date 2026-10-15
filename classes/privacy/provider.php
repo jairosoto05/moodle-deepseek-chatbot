@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Privacy provider for OpenAI ChatBot Block
+ * Privacy provider for the ChatBot Block.
  *
  * @package    block_openai_chatbot
  * @copyright  2025
@@ -25,85 +25,30 @@
 namespace block_openai_chatbot\privacy;
 
 use core_privacy\local\metadata\collection;
-use core_privacy\local\request\context;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
- * Privacy provider class for OpenAI ChatBot Block
+ * Privacy provider class for the ChatBot Block.
+ *
+ * The plugin stores no personal data locally: questions are only forwarded to DeepSeek for
+ * processing and no conversation history is persisted in Moodle.
  */
 class provider implements
     \core_privacy\local\metadata\provider,
     \core_privacy\local\request\data_provider {
-
     /**
-     * Get metadata about data stored or transmitted by this plugin
+     * Get metadata about data stored or transmitted by this plugin.
      *
      * @param collection $collection
      * @return collection
      */
     public static function get_metadata(collection $collection): collection {
-        $collection->add_external_location_link('openai', [
-            'question' => 'privacy:metadata:openai:question',
-            'course_context' => 'privacy:metadata:openai:course_context',
-        ], 'privacy:metadata:openai');
+        $collection->add_external_location_link('deepseek', [
+            'question' => 'privacy:metadata:deepseek:question',
+            'course_context' => 'privacy:metadata:deepseek:course_context',
+            'course_structure' => 'privacy:metadata:deepseek:course_structure',
+            'course_deadlines' => 'privacy:metadata:deepseek:course_deadlines',
+        ], 'privacy:metadata:deepseek');
 
         return $collection;
-    }
-
-    /**
-     * Get contexts containing user data for the specified user
-     *
-     * @param int $userid
-     * @return \core_privacy\local\request\contextlist
-     */
-    public static function get_contexts_for_userid(int $userid): \core_privacy\local\request\contextlist {
-        // This plugin does not store any user data locally
-        return new \core_privacy\local\request\contextlist();
-    }
-
-    /**
-     * Export user data for the specified user in the specified contexts
-     *
-     * @param \core_privacy\local\request\approved_contextlist $contextlist
-     */
-    public static function export_user_data(\core_privacy\local\request\approved_contextlist $contextlist) {
-        // This plugin does not store any user data locally
-    }
-
-    /**
-     * Delete user data for the specified user in the specified contexts
-     *
-     * @param \core_privacy\local\request\approved_contextlist $contextlist
-     */
-    public static function delete_data_for_user(\core_privacy\local\request\approved_contextlist $contextlist) {
-        // This plugin does not store any user data locally
-    }
-
-    /**
-     * Delete user data for multiple users in the specified context
-     *
-     * @param \core_privacy\local\request\approved_userlist $userlist
-     */
-    public static function delete_data_for_users(\core_privacy\local\request\approved_userlist $userlist) {
-        // This plugin does not store any user data locally
-    }
-
-    /**
-     * Get users in the specified context
-     *
-     * @param \core_privacy\local\request\userlist $userlist
-     */
-    public static function get_users_in_context(\core_privacy\local\request\userlist $userlist) {
-        // This plugin does not store any user data locally
-    }
-
-    /**
-     * Delete all user data in the specified context
-     *
-     * @param context $context
-     */
-    public static function delete_data_for_all_users_in_context(context $context) {
-        // This plugin does not store any user data locally
     }
 }

@@ -15,7 +15,10 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * External services definition for OpenAI ChatBot Block
+ * External services definition for the ChatBot Block.
+ *
+ * The function name is part of the published contract (the block JavaScript and the mobile app
+ * call it) and therefore keeps its original name.
  *
  * @package    block_openai_chatbot
  * @copyright  2025 Esteban Piazza <esteban@codeki.org>
@@ -24,23 +27,23 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$functions = array(
-    'block_openai_chatbot_ask_question' => array(
+$functions = [
+    'block_openai_chatbot_ask_question' => [
         'classname' => 'block_openai_chatbot_external',
         'methodname' => 'ask_question',
         'classpath' => 'blocks/openai_chatbot/classes/external.php',
-        'description' => 'Submit a question to the OpenAI Assistant',
+        'description' => 'Submit a question to the DeepSeek powered assistant',
         'type' => 'write',
         'ajax' => true,
         'capabilities' => 'block/openai_chatbot:view',
-        'services' => array(MOODLE_OFFICIAL_MOBILE_SERVICE)
-    )
-);
+        'services' => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
+];
 
-$services = array(
-    'OpenAI ChatBot Service' => array(
-        'functions' => array('block_openai_chatbot_ask_question'),
+$services = [
+    'ChatBot Service' => [
+        'functions' => ['block_openai_chatbot_ask_question'],
         'restrictedusers' => 0,
         'enabled' => 1,
-    )
-);
+    ],
+];

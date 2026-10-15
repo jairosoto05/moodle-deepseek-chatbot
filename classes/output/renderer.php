@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Renderer for OpenAI ChatBot Block
+ * Renderer for the ChatBot Block
  *
  * @package    block_openai_chatbot
  * @copyright  2025 Esteban Piazza <esteban@codeki.org>
@@ -24,15 +24,12 @@
 
 namespace block_openai_chatbot\output;
 
-defined('MOODLE_INTERNAL') || die();
-
 use plugin_renderer_base;
 
 /**
- * Renderer class for OpenAI ChatBot block
+ * Renderer class for the ChatBot block
  */
 class renderer extends plugin_renderer_base {
-
     /**
      * Render the chatbot interface
      *
