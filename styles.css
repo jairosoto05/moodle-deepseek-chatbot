@@ -1,0 +1,143 @@
+/* ChatGPT Chatbot Block Styles */
+.chatbot-container {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.chatbot-header {
+    font-weight: bold;
+    font-size: 16px;
+    color: #495057;
+    margin-bottom: 15px;
+    text-align: center;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 10px;
+}
+
+.chatbot-input-group {
+    margin-bottom: 10px;
+}
+
+.chatbot-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.chatbot-button-container {
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.chatbot-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    min-width: 100px;
+}
+
+.chatbot-button:hover {
+    background: #0056b3;
+}
+
+.chatbot-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+
+.chatbot-response {
+    min-height: 60px;
+}
+
+.chatbot-welcome {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.chatbot-question {
+    background: #e3f2fd;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-weight: 500;
+    color: #1565c0;
+}
+
+.chatbot-answer {
+    background: #f1f8e9;
+    border: 1px solid #c8e6c9;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.chatbot-answer-header {
+    background: #4caf50;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px 6px 0 0;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.chatbot-answer-content {
+    padding: 12px;
+    color: #2e7d32;
+    line-height: 1.5;
+}
+
+.chatbot-error {
+    background: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #ef9a9a;
+    margin-top: 10px;
+}
+
+.chatbot-form {
+    margin: 0;
+}
+
+.chatbot-loading {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+    padding: 15px;
+    border-radius: 6px;
+    text-align: center;
+    margin: 10px 0;
+}
+
+.chatbot-dots {
+    display: inline-block;
+    animation: chatbot-blink 1.4s infinite both;
+}
+
+.chatbot-dots:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.chatbot-dots:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes chatbot-blink {
+    0%, 80%, 100% {
+        opacity: 0;
+    }
+    40% {
+        opacity: 1;
+    }
+}
